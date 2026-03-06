@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package model.service.v1;
+
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+import "gnostic/openapi/v3/annotations.proto";
+import "google/api/field_behavior.proto";
+import "pagination/v1/pagination.proto";
+
+
+
+
+// 模型详情请求
+message ListTagsRequest {
+  uint64 id = 1;
+}
+
+message Ref {
+  optional string commit_id = 1;
+  optional string id = 2;
+}
+
+message ListTagsResponse {
+  repeated Ref results = 1;
+}
+
+message ListObjectsRequest {
+  uint64 id = 1;
+  string branch = 2;
+
+  ListObjectsParams params = 3;
+}
+
+message ListObjectsParams {
+  optional bool user_metadata = 1;
+  optional bool presign = 2;
+
+  // After return items after this value
+  optional string after = 3;
+
+  // Amount how many items to return
+  optional int32 amount = 4;
+
+  // Delimiter delimiter used to group common prefixes by
+  optional string delimiter = 5;
+
+  // Prefix return items prefixed with this value
+  optional string prefix = 6;
+}
+
+message Pagination {
+  // HasMore: 是否有下一页
+  bool has_more = 1 [json_name = "has_more"];
+  // MaxPerPage: 每页最大条目数
+  int32 max_per_page = 2 [json_name = "max_per_page"];
+  // NextOffset: 下一页的偏移量令牌
+  string next_offset = 3 [json_name = "next_offset"];
+  // Results: 当前页的结果数量
+  int32 results = 4 [json_name = "results"];
+}
+
+// ObjectStats 对象统计信息，对应Go中的 ObjectStats 结构体
+message ObjectStats {
+  // 校验和
+  string checksum = 1 [json_name = "checksum"];
+  // ContentType: 对象的媒体类型（可选）
+  optional string content_type = 2 [json_name = "content_type"];
+  // Metadata: 用户自定义元数据（可选）
+  map<string, string> metadata = 3 [json_name = "metadata"];
+  // Mtime: Unix时间戳（秒级）
+  int64 mtime = 4 [json_name = "mtime"];
+  // 路径
+  string path = 5 [json_name = "path"];
+  // PathType: 路径类型（对应Go的ObjectStatsPathType，string类型）
+  string path_type = 6 [json_name = "path_type"];
+  // PhysicalAddress: 底层对象存储上的对象位置，原生URI或预签名HTTP URL
+  string physical_address = 7 [json_name = "physical_address"];
+  // PhysicalAddressExpiry: 预签名URL的过期时间（Unix时间戳，可选）
+  optional int64 physical_address_expiry = 8 [json_name = "physical_address_expiry"];
+  // SizeBytes: 对象大小（字节数，可选）
+  optional int64 size_bytes = 9 [json_name = "size_bytes"];
+}
+
+// ListObjectsResponse 
+message ListObjectsResponse {
+  // 分页信息
+  Pagination pagination = 1 [json_name = "pagination"];
+  // 结果列表
+  repeated ObjectStats results = 2 [json_name = "results"];
+}

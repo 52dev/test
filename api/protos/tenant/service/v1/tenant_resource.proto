@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+package tenant.service.v1;
+
+import "google/protobuf/empty.proto";
+import "google/api/annotations.proto";
+
+// --- 1. 全局资源定义 (Resource Flavor) ---
+
+message CreateFlavorReq {
+  string name = 1; // e.g., "nvidia-a100", "generic-cpu"
+  map<string, string> labels = 2; // e.g., {"node.kubernetes.io/instance-type": "a100"}
+  map<string, string> taints = 3; // e.g., {"nvidia.com/gpu": "NoSchedule"}
+}
+
+message ListFlavorsResp {
+  repeated FlavorInfo flavors = 1;
+}
+
+message FlavorInfo {
+  string name = 1;
+  map<string, string> labels = 2;
+}
+
+// --- 2. 租户管理 (Tenant Lifecycle) ---
+
+message RegisterTenantReq {
+  // 用户只需提供显示名称，系统自动生成唯一 ID
+  string display_name = 1; // e.g. "AI Research Team A"
+
+  // 初始配额定义
+  TenantQuota quota = 2;
+}
+
+message DeleteTenantReq {
+  string tenant_name = 1;
+}
+
+message UpdateTenantQuotaReq {
+  string tenant_name = 1; // 必须提供系统生成的 ID (即 Namespace)
+  TenantQuota quota = 2;
+}
+
+message TenantQuota {
+  // 定义该租户拥有的资源上限
+  repeated FlavorQuota flavors = 1;
+}
+
+message FlavorQuota {
+  string flavor_name = 1; // e.g., "generic-cpu"
+  repeated ResourceLimit resources = 2;
+}
+
+message ResourceLimit {
+  string name = 1; // "cpu", "memory", "nvidia.com/gpu", "ephemeral-storage"
+  string nominal_quota = 2; // "10", "20Gi", "1Ti"
+}
+
+message TenantDetailResp {
+  string tenant_name = 1;   // 系统生成的唯一 ID
+  string display_name = 2;  // 显示名称
+  string namespace = 3;     // K8s Namespace
+  string cohort = 4;        // 租户专属隔离 Cohort
+  TenantQuota nominal_quota = 5; // 配额上限
+  TenantQuota used_quota = 6;    // 当前实时使用量
+}
+
+message GetTenantReq {
+  string tenant_name = 1;
+}
+
+// --- 3. 配额检查 (用于创建任务前的预检) ---
+
+message Quota {
+  string cpu = 1;     // "2"
+  string memory = 2;  // "4Gi"
+  string storage = 3; // "10Gi" (新增磁盘支持)
+  string gpu = 4;     // "1" (可选)
+}
+
+message CheckQuotaReq {
+  string tenant_name = 1;
+  // 资源需求
+  Quota quota = 2;
+  string flavor_name = 3;
+}
+
+message CheckQuotaResp {
+  bool allowed = 1;
+  string reason = 2;  // 如果拒绝，返回具体原因 (e.g. "CPU insufficient: free=1, req=2")
+}
+
+
+
+
+// --- 服务定义 ---
+
+service TenantService {
+  // 1. 全局资源池配置 (ResourceFlavor)
+  rpc CreateFlavor(CreateFlavorReq) returns (google.protobuf.Empty) {}
+  rpc ListFlavors(google.protobuf.Empty) returns (ListFlavorsResp) {}
+
+  // 2. 租户生命周期
+  rpc RegisterTenant(RegisterTenantReq) returns (TenantDetailResp) {}
+  rpc DeleteTenant(DeleteTenantReq) returns (google.protobuf.Empty) {}
+
+  rpc UpdateQuota(UpdateTenantQuotaReq) returns (TenantDetailResp) {}
+
+  rpc GetTenant(GetTenantReq) returns (TenantDetailResp) {}
+
+  // 3. 配额预检 (前端/业务服务调用)
+  rpc CheckQuota(CheckQuotaReq) returns (CheckQuotaResp) {}
+
+
+}

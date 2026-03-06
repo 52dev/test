@@ -1,0 +1,1233 @@
+# Generated with protoc-gen-openapi
+# https://github.com/google/gnostic/tree/master/cmd/protoc-gen-openapi
+
+openapi: 3.0.3
+info:
+    title: AIMS GO API
+    description: AIMS GO API
+    contact:
+        name: wang.qiyuan
+        url: https://github.com/aims-go/aims-go
+        email: wang.qiyuan@21vianet.com
+    license:
+        name: MIT License
+        url: https://github.com/aims-go/aims-go/blob/master/LICENSE
+    version: "1.0"
+paths:
+    /server/v1/inference:start:
+        post:
+            tags:
+                - InferenceService
+            description: 启动沙箱
+            operationId: InferenceService_Start
+            requestBody:
+                content:
+                    application/json: {}
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content: {}
+    /server/v1/models:
+        get:
+            tags:
+                - ModelService
+            description: 模型列表
+            operationId: ModelService_List
+            parameters:
+                - name: page
+                  in: query
+                  description: 当前页码（从1开始，默认1）
+                  schema:
+                    type: integer
+                    format: uint32
+                - name: pageSize
+                  in: query
+                  description: 每页条数（默认10，建议设置上限如100）
+                  schema:
+                    type: integer
+                    format: uint32
+                - name: offset
+                  in: query
+                  description: 跳过的记录数（从0开始，默认0）
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  description: 最多返回的记录数（默认10，建议设置上限如100）
+                  schema:
+                    type: integer
+                    format: uint32
+                - name: token
+                  in: query
+                  description: 上一页最后一条记录的游标（如ID/时间戳+ID，首次请求为空）
+                  schema:
+                    type: string
+                - name: noPaging
+                  in: query
+                  description: 是否不分页，如果为true，则page和pageSize参数无效。
+                  schema:
+                    type: boolean
+                - name: query
+                  in: query
+                  description: JSON字符串过滤条件，基础语法：{"field1":"val1", "field2___icontains":"val2"}，具体请参见：https://github.com/tx7do/go-crud/tree/main/pagination/filter/README.md
+                  schema:
+                    type: string
+                - name: filter
+                  in: query
+                  description: Google AIP规范字符串过滤条件
+                  schema:
+                    type: string
+                - name: filterExpr.type
+                  in: query
+                  description: 过滤表达式类型
+                  schema:
+                    enum:
+                        - EXPR_TYPE_UNSPECIFIED
+                        - AND
+                        - OR
+                    type: string
+                    format: enum
+                - name: orderBy
+                  in: query
+                  description: 排序条件
+                  schema:
+                    type: string
+                - name: fieldMask
+                  in: query
+                  description: 字段掩码，其作用为SELECT中的字段，其语法为使用逗号分隔字段名，例如：id,realName,userName。如果为空则选中所有字段，即SELECT *。
+                  schema:
+                    type: string
+                    format: field-mask
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListModelResponse'
+        post:
+            tags:
+                - ModelService
+            description: 创建模型
+            operationId: ModelService_Create
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateModelRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Model'
+    /server/v1/models/{id}:
+        get:
+            tags:
+                - ModelService
+            description: 模型详情
+            operationId: ModelService_Get
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: viewMask
+                  in: query
+                  schema:
+                    type: string
+                    format: field-mask
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Model'
+        put:
+            tags:
+                - ModelService
+            description: 更新模型
+            operationId: ModelService_Update
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateModelRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content: {}
+        delete:
+            tags:
+                - ModelService
+            description: 删除模型
+            operationId: ModelService_Delete
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content: {}
+    /server/v1/models/{id}/repositories/{branch}/objects/ls:
+        get:
+            tags:
+                - ModelService
+            description: 模型对象列表
+            operationId: ModelService_ListObjects
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: branch
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: params.userMetadata
+                  in: query
+                  schema:
+                    type: boolean
+                - name: params.presign
+                  in: query
+                  schema:
+                    type: boolean
+                - name: params.after
+                  in: query
+                  description: After return items after this value
+                  schema:
+                    type: string
+                - name: params.amount
+                  in: query
+                  description: Amount how many items to return
+                  schema:
+                    type: integer
+                    format: int32
+                - name: params.delimiter
+                  in: query
+                  description: Delimiter delimiter used to group common prefixes by
+                  schema:
+                    type: string
+                - name: params.prefix
+                  in: query
+                  description: Prefix return items prefixed with this value
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListObjectsResponse'
+    /server/v1/models/{id}/tags:
+        get:
+            tags:
+                - ModelService
+            operationId: ModelService_ListTags
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListTagsResponse'
+    /server/v1/models:exists:
+        get:
+            tags:
+                - ModelService
+            description: 是否存在
+            operationId: ModelService_Exists
+            parameters:
+                - name: id
+                  in: query
+                  schema:
+                    type: string
+                - name: name
+                  in: query
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ModelExistsResponse'
+    /server/v1/sandboxes:
+        get:
+            tags:
+                - SandboxService
+            description: 沙箱列表
+            operationId: SandboxService_List
+            parameters:
+                - name: page
+                  in: query
+                  description: 当前页码（从1开始，默认1）
+                  schema:
+                    type: integer
+                    format: uint32
+                - name: pageSize
+                  in: query
+                  description: 每页条数（默认10，建议设置上限如100）
+                  schema:
+                    type: integer
+                    format: uint32
+                - name: offset
+                  in: query
+                  description: 跳过的记录数（从0开始，默认0）
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  description: 最多返回的记录数（默认10，建议设置上限如100）
+                  schema:
+                    type: integer
+                    format: uint32
+                - name: token
+                  in: query
+                  description: 上一页最后一条记录的游标（如ID/时间戳+ID，首次请求为空）
+                  schema:
+                    type: string
+                - name: noPaging
+                  in: query
+                  description: 是否不分页，如果为true，则page和pageSize参数无效。
+                  schema:
+                    type: boolean
+                - name: query
+                  in: query
+                  description: JSON字符串过滤条件，基础语法：{"field1":"val1", "field2___icontains":"val2"}，具体请参见：https://github.com/tx7do/go-crud/tree/main/pagination/filter/README.md
+                  schema:
+                    type: string
+                - name: filter
+                  in: query
+                  description: Google AIP规范字符串过滤条件
+                  schema:
+                    type: string
+                - name: filterExpr.type
+                  in: query
+                  description: 过滤表达式类型
+                  schema:
+                    enum:
+                        - EXPR_TYPE_UNSPECIFIED
+                        - AND
+                        - OR
+                    type: string
+                    format: enum
+                - name: orderBy
+                  in: query
+                  description: 排序条件
+                  schema:
+                    type: string
+                - name: fieldMask
+                  in: query
+                  description: 字段掩码，其作用为SELECT中的字段，其语法为使用逗号分隔字段名，例如：id,realName,userName。如果为空则选中所有字段，即SELECT *。
+                  schema:
+                    type: string
+                    format: field-mask
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListSandboxResponse'
+        post:
+            tags:
+                - SandboxService
+            description: 创建沙箱（需先调用资源服务分配GPU）
+            operationId: SandboxService_Create
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateSandboxRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content: {}
+    /server/v1/sandboxes/{id}:
+        get:
+            tags:
+                - SandboxService
+            description: 沙箱详情
+            operationId: SandboxService_Get
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: name
+                  in: query
+                  schema:
+                    type: string
+                - name: viewMask
+                  in: query
+                  schema:
+                    type: string
+                    format: field-mask
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Sandbox'
+        put:
+            tags:
+                - SandboxService
+            description: 更新沙箱
+            operationId: SandboxService_Update
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateSandboxRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content: {}
+        delete:
+            tags:
+                - SandboxService
+            description: 删除沙箱（销毁，需先调用资源服务释放GPU）
+            operationId: SandboxService_Delete
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: removeHistory
+                  in: query
+                  schema:
+                    type: boolean
+            responses:
+                "200":
+                    description: OK
+                    content: {}
+    /server/v1/sandboxes/{id}/password:
+        post:
+            tags:
+                - SandboxService
+            description: 获取沙箱访问密码
+            operationId: SandboxService_GetPassword
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/GetSandboxPasswordRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GetSandboxPasswordResponse'
+    /server/v1/sandboxes/{id}:restart:
+        post:
+            tags:
+                - SandboxService
+            description: 重启沙箱
+            operationId: SandboxService_Restart
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RestartSandboxRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content: {}
+    /server/v1/sandboxes/{id}:start:
+        post:
+            tags:
+                - SandboxService
+            description: 启动沙箱
+            operationId: SandboxService_Start
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/StartSandboxRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content: {}
+    /server/v1/sandboxes/{id}:stop:
+        post:
+            tags:
+                - SandboxService
+            description: 停止沙箱
+            operationId: SandboxService_Stop
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/StopSandboxRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content: {}
+    /server/v1/sandboxes:restart:
+        post:
+            tags:
+                - InferenceService
+            description: 重启沙箱
+            operationId: InferenceService_Restart
+            requestBody:
+                content:
+                    application/json: {}
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RestartSandboxResponse'
+    /server/v1/sandboxes:stop:
+        post:
+            tags:
+                - InferenceService
+            description: 停止沙箱
+            operationId: InferenceService_Stop
+            requestBody:
+                content:
+                    application/json: {}
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content: {}
+    /v1/resource/flavors:
+        get:
+            tags:
+                - TenantService
+            operationId: TenantService_ListFlavors
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListFlavorsResp'
+        post:
+            tags:
+                - TenantService
+            description: 1. 全局资源池配置 (ResourceFlavor)
+            operationId: TenantService_CreateFlavor
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateFlavorReq'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content: {}
+    /v1/tenants:
+        post:
+            tags:
+                - TenantService
+            description: 2. 租户生命周期
+            operationId: TenantService_RegisterTenant
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RegisterTenantReq'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TenantDetailResp'
+    /v1/tenants/{tenantName}:
+        get:
+            tags:
+                - TenantService
+            operationId: TenantService_GetTenant
+            parameters:
+                - name: tenantName
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TenantDetailResp'
+        delete:
+            tags:
+                - TenantService
+            operationId: TenantService_DeleteTenant
+            parameters:
+                - name: tenantName
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content: {}
+    /v1/tenants/{tenantName}/check-quota:
+        post:
+            tags:
+                - TenantService
+            description: 3. 配额预检 (前端/业务服务调用)
+            operationId: TenantService_CheckQuota
+            parameters:
+                - name: tenantName
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CheckQuotaReq'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CheckQuotaResp'
+    /v1/tenants/{tenantName}/quota:
+        put:
+            tags:
+                - TenantService
+            operationId: TenantService_UpdateQuota
+            parameters:
+                - name: tenantName
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateTenantQuotaReq'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TenantDetailResp'
+components:
+    schemas:
+        CheckQuotaReq:
+            type: object
+            properties:
+                tenantName:
+                    type: string
+                quota:
+                    allOf:
+                        - $ref: '#/components/schemas/Quota'
+                    description: 资源需求
+                flavorName:
+                    type: string
+        CheckQuotaResp:
+            type: object
+            properties:
+                allowed:
+                    type: boolean
+                reason:
+                    type: string
+        CreateFlavorReq:
+            type: object
+            properties:
+                name:
+                    type: string
+                labels:
+                    type: object
+                    additionalProperties:
+                        type: string
+                taints:
+                    type: object
+                    additionalProperties:
+                        type: string
+        CreateModelRequest:
+            type: object
+            properties:
+                data:
+                    $ref: '#/components/schemas/Model'
+            description: "-------------------------- 模型专属消息 --------------------------\r\n 创建模型请求"
+        CreateSandboxRequest:
+            type: object
+            properties:
+                data:
+                    $ref: '#/components/schemas/Sandbox'
+                password:
+                    writeOnly: true
+                    type: string
+                    description: 访问密码（仅输入，不返回）
+                flavor_name:
+                    type: string
+                    description: 指定运行规格
+            description: 创建沙箱请求
+        FlavorInfo:
+            type: object
+            properties:
+                name:
+                    type: string
+                labels:
+                    type: object
+                    additionalProperties:
+                        type: string
+        FlavorQuota:
+            type: object
+            properties:
+                flavorName:
+                    type: string
+                resources:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ResourceLimit'
+        GetSandboxPasswordRequest:
+            type: object
+            properties:
+                id:
+                    type: string
+            description: 沙箱详情请求
+        GetSandboxPasswordResponse:
+            type: object
+            properties:
+                password:
+                    type: string
+                    description: 访问密码
+            description: 沙箱详情请求
+        KratosStatus:
+            type: object
+            properties:
+                code:
+                    type: number
+                    description: 错误码
+                    format: int32
+                message:
+                    type: string
+                    description: 错误消息
+                reason:
+                    type: string
+                    description: 错误原因
+                metadata:
+                    type: object
+                    description: 元数据
+            description: Kratos错误返回
+        ListFlavorsResp:
+            type: object
+            properties:
+                flavors:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/FlavorInfo'
+        ListModelResponse:
+            type: object
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Model'
+                total:
+                    type: string
+            description: 模型列表请求
+        ListObjectsResponse:
+            type: object
+            properties:
+                pagination:
+                    allOf:
+                        - $ref: '#/components/schemas/Pagination'
+                    description: 分页信息
+                results:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ObjectStats'
+                    description: 结果列表
+            description: ListObjectsResponse
+        ListSandboxResponse:
+            type: object
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Sandbox'
+                total:
+                    type: string
+            description: 沙箱列表响应
+        ListTagsResponse:
+            type: object
+            properties:
+                results:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Ref'
+        Model:
+            type: object
+            properties:
+                id:
+                    readOnly: true
+                    type: string
+                    description: 模型ID
+                name:
+                    type: string
+                    description: 模型名称
+                slug:
+                    type: string
+                    description: 仓库命名 (类似 HF 的 'google/bert-base-uncased'，在私有云中，通常是 'username/modelname'
+                dockerImageRef:
+                    type: string
+                    description: NIM模型的镜像地址, 如 nvcr.io/nvidia/llama2:latest
+                baseFramework:
+                    type: string
+                    description: 基础框架，如 pytorch, tensorflow, vllm
+                type:
+                    enum:
+                        - CUSTOM
+                        - NIM
+                        - HF
+                        - ONLY_IMAGE
+                    type: string
+                    description: 类型
+                    format: enum
+                status:
+                    enum:
+                        - NOT_CACHED
+                        - CACHING
+                        - READY
+                    type: string
+                    description: 状态
+                    format: enum
+                description:
+                    type: string
+                    description: 描述
+                remark:
+                    type: string
+                    description: 备注
+                readmeText:
+                    type: string
+                    description: Model Card 内容，支持 Markdown
+                downloads:
+                    type: string
+                    description: 下载次数
+                likes:
+                    type: string
+                    description: 点赞数
+                license:
+                    type: string
+                    description: 许可证，如 MIT, Apache-2.0, Llama-Community
+                uuid:
+                    readOnly: true
+                    type: string
+                    description: 模型唯一标识符(UUID)
+                ports:
+                    type: array
+                    items:
+                        type: integer
+                        format: int32
+                    description: 端口
+                writablePaths:
+                    type: array
+                    items:
+                        type: string
+                    description: 可写路径
+                jupyterCommand:
+                    type: array
+                    items:
+                        type: string
+                    description: 启动命令参数
+                commandMapping:
+                    type: object
+                    additionalProperties:
+                        type: string
+                    description: '命令映射，用于不同环境下的命令适配，例如 {''start'': ''python app.py'', ''jupyter'': ''jupyter notebook --ip=}'
+                env:
+                    type: object
+                    additionalProperties:
+                        type: string
+                    description: '环境变量，键值对形式，例如 {''ENV_VAR1'': ''value1'', ''ENV_VAR2'': ''value2''}'
+                llmCommand:
+                    type: array
+                    items:
+                        type: string
+                    description: 启动命令参数
+                createdAt:
+                    type: string
+                    description: 创建时间
+                    format: date-time
+                updatedAt:
+                    type: string
+                    description: 更新时间
+                    format: date-time
+                deletedAt:
+                    type: string
+                    description: 删除时间
+                    format: date-time
+            description: 模型详情信息
+        ModelExistsResponse:
+            type: object
+            properties:
+                exist:
+                    type: boolean
+            description: 模型是否存在 - 答复
+        ObjectStats:
+            type: object
+            properties:
+                checksum:
+                    type: string
+                    description: 校验和
+                content_type:
+                    type: string
+                    description: 'ContentType: 对象的媒体类型（可选）'
+                metadata:
+                    type: object
+                    additionalProperties:
+                        type: string
+                    description: 'Metadata: 用户自定义元数据（可选）'
+                mtime:
+                    type: string
+                    description: 'Mtime: Unix时间戳（秒级）'
+                path:
+                    type: string
+                    description: 路径
+                path_type:
+                    type: string
+                    description: 'PathType: 路径类型（对应Go的ObjectStatsPathType，string类型）'
+                physical_address:
+                    type: string
+                    description: 'PhysicalAddress: 底层对象存储上的对象位置，原生URI或预签名HTTP URL'
+                physical_address_expiry:
+                    type: string
+                    description: 'PhysicalAddressExpiry: 预签名URL的过期时间（Unix时间戳，可选）'
+                size_bytes:
+                    type: string
+                    description: 'SizeBytes: 对象大小（字节数，可选）'
+            description: ObjectStats 对象统计信息，对应Go中的 ObjectStats 结构体
+        Pagination:
+            type: object
+            properties:
+                has_more:
+                    type: boolean
+                    description: 'HasMore: 是否有下一页'
+                max_per_page:
+                    type: integer
+                    description: 'MaxPerPage: 每页最大条目数'
+                    format: int32
+                next_offset:
+                    type: string
+                    description: 'NextOffset: 下一页的偏移量令牌'
+                results:
+                    type: integer
+                    description: 'Results: 当前页的结果数量'
+                    format: int32
+        Quota:
+            type: object
+            properties:
+                cpu:
+                    type: string
+                memory:
+                    type: string
+                storage:
+                    type: string
+                gpu:
+                    type: string
+        Ref:
+            type: object
+            properties:
+                commitId:
+                    type: string
+                id:
+                    type: string
+        RegisterTenantReq:
+            type: object
+            properties:
+                displayName:
+                    type: string
+                    description: 用户只需提供显示名称，系统自动生成唯一 ID
+                quota:
+                    allOf:
+                        - $ref: '#/components/schemas/TenantQuota'
+                    description: 初始配额定义
+        ResourceLimit:
+            type: object
+            properties:
+                name:
+                    type: string
+                nominalQuota:
+                    type: string
+        RestartSandboxRequest:
+            type: object
+            properties:
+                id:
+                    type: string
+            description: 重启沙箱请求
+        RestartSandboxResponse:
+            type: object
+            properties:
+                count:
+                    type: integer
+                    format: int32
+            description: 重启沙箱响应
+        Sandbox:
+            required:
+                - name
+            type: object
+            properties:
+                id:
+                    type: string
+                    description: 沙箱ID
+                name:
+                    maxLength: 20
+                    pattern: ^[a-z0-9]{1,20}$
+                    type: string
+                    description: 沙箱名称，仅允许小写字母和数字，长度不超过20个字符
+                modelId:
+                    type: string
+                    description: 关联模型ID
+                modelName:
+                    type: string
+                    description: 模型名称
+                tenantName:
+                    type: string
+                    description: 所属租户
+                status:
+                    enum:
+                        - UNSPECIFIED
+                        - CREATING
+                        - RUNNING
+                        - STOPPED
+                        - RESTARTING
+                        - ERROR
+                        - DELETING
+                        - EXPIRED
+                    type: string
+                    description: 状态
+                    format: enum
+                config:
+                    example: null
+                    type: object
+                    additionalProperties:
+                        type: string
+                description:
+                    type: string
+                    description: 描述
+                remark:
+                    type: string
+                    description: 备注
+                quota:
+                    $ref: '#/components/schemas/Quota'
+                deploymentName:
+                    readOnly: true
+                    type: string
+                    description: 关联的K8s Deployment名称
+                url:
+                    type: string
+                    description: url
+                commandMapping:
+                    type: object
+                    additionalProperties:
+                        type: string
+                    description: '命令映射，用于不同环境下的命令适配，例如 {''start'': ''python app.py'', ''jupyter'': ''jupyter notebook --ip=}'
+                env:
+                    type: object
+                    additionalProperties:
+                        type: string
+                    description: '环境变量，键值对形式，例如 {''ENV_VAR1'': ''value1'', ''ENV_VAR2'': ''value2''}'
+                startedAt:
+                    type: string
+                    description: 启动时间
+                    format: date-time
+                finishedAt:
+                    type: string
+                    description: 结束时间
+                    format: date-time
+                expirationMinutes:
+                    type: string
+                    description: 过期时间
+                billingDurationSec:
+                    type: string
+                    description: 计费时长
+                createdAt:
+                    type: string
+                    description: 创建时间
+                    format: date-time
+                updatedAt:
+                    type: string
+                    description: 更新时间
+                    format: date-time
+                deletedAt:
+                    type: string
+                    description: 删除时间
+                    format: date-time
+            description: 沙箱详情信息
+        StartSandboxRequest:
+            type: object
+            properties:
+                id:
+                    type: string
+            description: 启动沙箱请求
+        StopSandboxRequest:
+            type: object
+            properties:
+                id:
+                    type: string
+            description: 停止沙箱请求
+        TenantDetailResp:
+            type: object
+            properties:
+                tenantName:
+                    type: string
+                displayName:
+                    type: string
+                namespace:
+                    type: string
+                cohort:
+                    type: string
+                nominalQuota:
+                    $ref: '#/components/schemas/TenantQuota'
+                usedQuota:
+                    $ref: '#/components/schemas/TenantQuota'
+        TenantQuota:
+            type: object
+            properties:
+                flavors:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/FlavorQuota'
+                    description: 定义该租户拥有的资源上限
+        UpdateModelRequest:
+            type: object
+            properties:
+                id:
+                    type: string
+                data:
+                    $ref: '#/components/schemas/Model'
+                updateMask:
+                    example: id,realname,username
+                    type: string
+                    description: 要更新的字段列表
+                    format: field-mask
+                allowMissing:
+                    type: boolean
+                    description: 如果设置为true的时候，资源不存在则会新增(插入)，并且在这种情况下`updateMask`字段将会被忽略。
+            description: 更新模型请求
+        UpdateSandboxRequest:
+            type: object
+            properties:
+                id:
+                    type: string
+                data:
+                    $ref: '#/components/schemas/Sandbox'
+                updateMask:
+                    example: id,realname,username
+                    type: string
+                    description: 要更新的字段列表
+                    format: field-mask
+                allowMissing:
+                    type: boolean
+                    description: 如果设置为true的时候，资源不存在则会新增(插入)，并且在这种情况下`updateMask`字段将会被忽略。
+            description: 更新沙箱请求
+        UpdateTenantQuotaReq:
+            type: object
+            properties:
+                tenantName:
+                    type: string
+                quota:
+                    $ref: '#/components/schemas/TenantQuota'
+    responses:
+        default:
+            description: default kratos response
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/KratosStatus'
+    securitySchemes:
+        OAuth2PasswordBearer:
+            type: oauth2
+            flows:
+                password:
+                    tokenUrl: /admin/v1/login
+                    refreshUrl: /admin/v1/refresh-token
+                    scopes: {}
+security:
+    - OAuth2PasswordBearer: []
+tags:
+    - name: InferenceService
+      description: '-------------------------- 沙箱服务定义 --------------------------'
+    - name: ModelService
+      description: '-------------------------- 沙箱服务定义 --------------------------'
+    - name: SandboxService
+      description: '-------------------------- 沙箱服务定义 --------------------------'
+    - name: TenantService

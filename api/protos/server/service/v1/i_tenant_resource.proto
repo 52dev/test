@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package api.service.v1;
+
+import "google/protobuf/empty.proto";
+import "google/api/annotations.proto";
+import "tenant/service/v1/tenant_resource.proto"; // 引用通用定义
+
+// --- 服务定义 ---
+
+service TenantService {
+  // 1. 全局资源池配置 (ResourceFlavor)
+  rpc CreateFlavor(tenant.service.v1.CreateFlavorReq) returns (google.protobuf.Empty) {
+    option (google.api.http) = { post: "/v1/resource/flavors" body: "*" };
+  }
+  rpc ListFlavors(google.protobuf.Empty) returns (tenant.service.v1.ListFlavorsResp) {
+    option (google.api.http) = { get: "/v1/resource/flavors" };
+  }
+
+  // 2. 租户生命周期
+  rpc RegisterTenant(tenant.service.v1.RegisterTenantReq) returns (tenant.service.v1.TenantDetailResp) {
+    option (google.api.http) = { post: "/v1/tenants" body: "*" };
+  }
+
+  rpc DeleteTenant(tenant.service.v1.DeleteTenantReq) returns (google.protobuf.Empty) {
+    option (google.api.http) = { delete: "/v1/tenants/{tenant_name}" };
+  }
+
+  rpc UpdateQuota(tenant.service.v1.UpdateTenantQuotaReq) returns (tenant.service.v1.TenantDetailResp) {
+    option (google.api.http) = { put: "/v1/tenants/{tenant_name}/quota" body: "*" };
+  }
+
+  rpc GetTenant(tenant.service.v1.GetTenantReq) returns (tenant.service.v1.TenantDetailResp) {
+    option (google.api.http) = { get: "/v1/tenants/{tenant_name}" };
+  }
+
+  // 3. 配额预检 (前端/业务服务调用)
+  rpc CheckQuota(tenant.service.v1.CheckQuotaReq) returns (tenant.service.v1.CheckQuotaResp) {
+    option (google.api.http) = { post: "/v1/tenants/{tenant_name}/check-quota" body: "*" };
+  }
+}

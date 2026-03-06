@@ -1,0 +1,248 @@
+syntax = "proto3";
+
+package model.service.v1;
+
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+import "gnostic/openapi/v3/annotations.proto";
+import "google/api/field_behavior.proto";
+import "pagination/v1/pagination.proto";
+import "model/service/v1/model_registry.proto";
+
+// -------------------------- 模型服务定义 --------------------------
+service ModelService {
+  // 模型列表
+  rpc List(pagination.PagingRequest) returns (ListModelResponse) {}
+
+  // 统计沙箱数量
+  rpc Count (pagination.PagingRequest) returns (CountModelResponse) {}
+
+  // 模型详情（无NIM Cache则自动创建）
+  rpc Get(GetModelRequest) returns (Model){}
+
+  // 创建模型（NIM模型自动初始化Cache）
+  rpc Create(CreateModelRequest) returns (Model){}
+
+  // 更新模型
+  rpc Update (UpdateModelRequest) returns (google.protobuf.Empty) {}
+
+  // 删除模型（同步删除关联NIM Cache）
+  rpc Delete(DeleteModelRequest) returns (google.protobuf.Empty) {}
+
+  // 模型是否存在
+  rpc Exists (ModelExistsRequest) returns (ModelExistsResponse) {}
+
+  // 模型标签列表
+  rpc ListTags(ListTagsRequest) returns (ListTagsResponse) {}
+
+  // 模型对象列表
+  rpc ListObjects(ListObjectsRequest) returns (ListObjectsResponse){}
+}
+
+
+
+// 模型详情信息
+message Model {
+  // 模型状态
+  enum Status {
+    NOT_CACHED = 0; // 未缓存
+    CACHING = 1; // 缓存中
+    READY = 2;       // 缓存完成
+  }
+  enum Type {
+    CUSTOM = 0;      // 自定义模型
+    NIM = 1;         // NIM模型
+    HF = 2;          // HuggingFace模型
+    ONLY_IMAGE = 3;  // 仅镜像模型（无模型卡信息，仅提供镜像地址和基础框架信息，用于快速部署）
+  }
+
+  optional uint64 id = 1 [
+    json_name = "id",
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (gnostic.openapi.v3.property) = {description: "模型ID"}
+  ];  // 模型ID
+  optional string name = 2 [json_name = "name", (gnostic.openapi.v3.property) = {description: "模型名称"}];  // 模型名称
+  optional string slug = 3 [
+    json_name = "slug",
+    (gnostic.openapi.v3.property) = {description: "仓库命名 (类似 HF 的 'google/bert-base-uncased'，在私有云中，通常是 'username/modelname'"}
+  ]; // 仓库命名
+
+  optional string docker_image_ref = 5 [
+    json_name = "dockerImageRef",
+    (gnostic.openapi.v3.property) = {description: "NIM模型的镜像地址, 如 nvcr.io/nvidia/llama2:latest"}
+  ]; // NIM模型的镜像地址
+
+  optional string base_framework = 6 [
+    json_name = "baseFramework",
+    (gnostic.openapi.v3.property) = {description: "基础框架，如 pytorch, tensorflow, vllm"}
+  ]; // 基础框架
+
+  optional Type type = 7  [
+    json_name = "type",
+    (google.api.field_behavior) = OPTIONAL,
+    (gnostic.openapi.v3.property) = {
+      description: "类型"
+    }
+  ];// 模型类型
+  optional Status status = 8[
+    json_name = "status",
+    (gnostic.openapi.v3.property) = {description: "状态"}
+  ]; // 模型状态
+
+  optional string description = 9 [
+    json_name = "description",
+    (gnostic.openapi.v3.property) = {description: "描述"}
+  ];  // 描述
+  optional string remark = 10 [
+    json_name = "remark",
+    (gnostic.openapi.v3.property) = {description: "备注"}
+  ];  // 备注
+
+  optional string readme_text = 11 [
+    json_name = "readmeText",
+    (gnostic.openapi.v3.property) = {description: "Model Card 内容，支持 Markdown"}
+  ]; // Model Card 内容
+
+  optional int64 downloads = 12 [
+    json_name = "downloads",
+    (gnostic.openapi.v3.property) = {description: "下载次数"}
+  ]; // 下载次数
+
+  optional int64 likes = 13 [
+    json_name = "likes",
+    (gnostic.openapi.v3.property) = {description: "点赞数"}
+  ]; // 点赞数
+
+  optional string license = 14 [
+    json_name = "license",
+    (gnostic.openapi.v3.property) = {description: "许可证，如 MIT, Apache-2.0, Llama-Community"}
+  ]; // 许可证
+
+  optional string uuid = 15 [
+    json_name = "uuid",
+    (google.api.field_behavior) = OUTPUT_ONLY,
+    (gnostic.openapi.v3.property) = {description: "模型唯一标识符(UUID)"}
+  ]; // 模型唯一标识符(UUID)
+
+  repeated int32 ports = 16 [
+    json_name = "ports",
+    (gnostic.openapi.v3.property) = {description: "端口"}
+  ];
+
+  repeated string writable_paths = 17 [
+    json_name = "writablePaths",
+    (gnostic.openapi.v3.property) = {description: "可写路径"}
+  ];
+
+  repeated string jupyter_command = 18 [
+    json_name = "jupyterCommand",
+    (gnostic.openapi.v3.property) = {description: "启动命令参数"}
+  ];
+
+  map<string,string> command_mapping = 19 [
+    json_name = "commandMapping",
+    (gnostic.openapi.v3.property) = {
+      description: "命令映射，用于不同环境下的命令适配，例如 {'start': 'python app.py', 'jupyter': 'jupyter notebook --ip=}"
+    }
+  ];
+
+  map<string,string> env = 20 [
+    json_name = "env",
+    (gnostic.openapi.v3.property) = {
+      description: "环境变量，键值对形式，例如 {'ENV_VAR1': 'value1', 'ENV_VAR2': 'value2'}"
+    }
+  ];
+
+  repeated string LLM_command = 21 [
+    json_name = "llmCommand",
+    (gnostic.openapi.v3.property) = {description: "启动命令参数"}
+  ];
+
+  optional google.protobuf.Timestamp created_at = 200 [json_name = "createdAt", (gnostic.openapi.v3.property) = {description: "创建时间"}];// 创建时间
+  optional google.protobuf.Timestamp updated_at = 201 [json_name = "updatedAt", (gnostic.openapi.v3.property) = {description: "更新时间"}];// 更新时间
+  optional google.protobuf.Timestamp deleted_at = 202 [json_name = "deletedAt", (gnostic.openapi.v3.property) = {description: "删除时间"}];// 删除时间
+
+}
+
+message ModelInfo {
+  Model data = 1;
+
+}
+
+// 模型列表请求
+message ListModelResponse {
+  repeated Model items = 1;
+  uint64 total = 2;
+}
+
+// 模型详情请求
+message GetModelRequest {
+  uint64 id = 1;
+
+  optional google.protobuf.FieldMask view_mask = 100 [
+    json_name = "viewMask",
+    (gnostic.openapi.v3.property) = {
+      description: "视图字段过滤器，用于控制返回的字段"
+    }
+  ]; // 视图字段过滤器，用于控制返回的字段
+}
+
+// -------------------------- 模型专属消息 --------------------------
+// 创建模型请求
+message CreateModelRequest {
+  Model data = 1;
+}
+
+// 更新模型请求
+message UpdateModelRequest {
+  uint64 id = 1;                                        // 沙箱ID
+  Model data = 2;
+
+  google.protobuf.FieldMask update_mask = 3 [
+    (gnostic.openapi.v3.property) = {
+      description: "要更新的字段列表",
+      example: {yaml : "id,realname,username"}
+    },
+    json_name = "updateMask"
+  ]; // 要更新的字段列表
+
+  optional bool allow_missing = 4 [
+    (gnostic.openapi.v3.property) = {description: "如果设置为true的时候，资源不存在则会新增(插入)，并且在这种情况下`updateMask`字段将会被忽略。"},
+    json_name = "allowMissing"
+  ]; // 如果设置为true的时候，资源不存在则会新增(插入)，并且在这种情况下`updateMask`字段将会被忽略。
+}
+
+// 删除模型请求
+message DeleteModelRequest {
+   uint64 id = 1;
+}
+
+// 模型是否存在 - 请求
+message ModelExistsRequest {
+  oneof query_by {
+    uint64 id = 1 [
+      (gnostic.openapi.v3.property) = {description: "模型ID", read_only: true},
+      json_name = "id"
+    ]; // 模型ID
+
+    string name = 2 [
+      (gnostic.openapi.v3.property) = {description: "模型名称", read_only: true},
+      json_name = "name"
+    ]; // 模型名称
+  }
+}
+
+// 模型是否存在 - 答复
+message ModelExistsResponse {
+  bool exist = 1;
+}
+
+// 模型数量响应
+message CountModelResponse {
+  uint64 count = 1;  // 模型数量
+}
+
+

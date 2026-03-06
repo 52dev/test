@@ -1,0 +1,294 @@
+syntax = "proto3";
+
+package sandbox.service.v1;
+
+import "gnostic/openapi/v3/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/struct.proto";
+import "pagination/v1/pagination.proto";
+import "tenant/service/v1/tenant_resource.proto";
+
+
+// 沙箱服务
+service SandboxService {
+  // 查询沙箱列表
+  rpc List (pagination.PagingRequest) returns (ListSandboxResponse) {}
+
+  // 统计沙箱数量
+  rpc Count (pagination.PagingRequest) returns (CountSandboxResponse) {}
+
+  // 查询沙箱详情
+  rpc Get (GetSandboxRequest) returns (Sandbox) {}
+
+  // 创建沙箱
+  rpc Create (CreateSandboxRequest) returns (google.protobuf.Empty) {}
+
+  // 更新沙箱
+  rpc Update (UpdateSandboxRequest) returns (google.protobuf.Empty) {}
+
+  // 删除沙箱
+  rpc Delete (DeleteSandboxRequest) returns (google.protobuf.Empty) {}
+
+  // 沙箱是否存在
+  rpc Exists (SandboxExistsRequest) returns (SandboxExistsResponse) {}
+
+  // 重启沙箱
+  rpc Restart (RestartSandboxRequest) returns (google.protobuf.Empty) {}
+
+  // 启动沙箱
+  rpc Start (StartSandboxRequest) returns (google.protobuf.Empty) {}
+
+  // 停止沙箱
+  rpc Stop (StopSandboxRequest) returns (google.protobuf.Empty) {}
+
+  // 获取沙箱访问密码
+  rpc GetPassword(GetSandboxPasswordRequest) returns (GetSandboxPasswordResponse) {}
+}
+
+
+// -------------------------- 沙箱专属消息 --------------------------
+
+
+
+
+
+// 沙箱详情信息
+message Sandbox {
+
+  // 职位状态
+  enum Status {
+    UNSPECIFIED = 0; // 未指定
+    CREATING = 1;    // 创建中
+    RUNNING = 2;     // 运行中
+    STOPPED = 3;     // 已停止
+    RESTARTING = 4;  // 重启中
+    ERROR = 5;       // 异常
+    DELETING = 6;    // 删除中
+    EXPIRED = 7;     // 已到期
+  }
+
+  optional uint64 id = 1 [
+    json_name = "id",
+    (gnostic.openapi.v3.property) = {description: "沙箱ID"}
+  ];  // 沙箱ID
+  string name = 2 [
+    json_name = "name",
+    (google.api.field_behavior) = REQUIRED,
+    (gnostic.openapi.v3.property) = {
+      description: "沙箱名称，仅允许小写字母和数字，长度不超过20个字符"
+      pattern: "^[a-z0-9]{1,20}$"
+      max_length: 20,
+    }
+  ];  // 沙箱名称
+  uint64 model_id = 3 [json_name = "modelId", (gnostic.openapi.v3.property) = {description: "关联模型ID"}];  // 关联模型ID
+  optional string model_name = 4 [json_name = "modelName", (gnostic.openapi.v3.property) = {description: "模型名称"}]; // 模型名称（冗余）
+  string tenant_name = 5 [json_name = "tenantName", (gnostic.openapi.v3.property) = {description: "所属租户"}];
+  optional Status status = 6 [
+    json_name = "status",
+    (gnostic.openapi.v3.property) = {description: "状态"}
+  ]; // 状态;              // 沙箱状态
+
+  map<string, string> config = 7 [
+    json_name = "config",
+    (gnostic.openapi.v3.property) = {
+      description: ""
+      example: {}
+    }
+  ]; // 沙箱配置
+  optional string description = 8 [
+    json_name = "description",
+    (gnostic.openapi.v3.property) = {description: "描述"}
+  ]; // 个人描述
+  optional string remark = 9 [
+    json_name = "remark",
+    (gnostic.openapi.v3.property) = {description: "备注"}
+  ];  // 备注
+
+  optional tenant.service.v1.Quota quota = 10 [
+    json_name = "quota",
+    (gnostic.openapi.v3.property) = {description: "沙箱资源配额"}
+  ];
+
+  string deployment_name = 11 [
+    json_name = "deploymentName",
+    (gnostic.openapi.v3.property) = {description: "关联的K8s Deployment名称"},
+    (google.api.field_behavior) = OUTPUT_ONLY
+  ];  // 关联的K8s Deployment名称（冗余字段，主要用于快速查询和展示）
+
+  optional string url = 12 [
+    json_name = "url",
+    (gnostic.openapi.v3.property) = {description: "url"}
+  ];
+
+
+  map<string,string> command_mapping = 19 [
+    json_name = "commandMapping",
+    (gnostic.openapi.v3.property) = {
+      description: "命令映射，用于不同环境下的命令适配，例如 {'start': 'python app.py', 'jupyter': 'jupyter notebook --ip=}"
+    }
+  ];
+
+  map<string,string> env = 20 [
+    json_name = "env",
+    (gnostic.openapi.v3.property) = {
+      description: "环境变量，键值对形式，例如 {'ENV_VAR1': 'value1', 'ENV_VAR2': 'value2'}"
+    }
+  ];
+
+
+  optional google.protobuf.Timestamp started_at = 100 [json_name = "startedAt", (gnostic.openapi.v3.property) = {description: "启动时间"}];// 启动时间
+  optional google.protobuf.Timestamp finished_at = 101 [json_name = "finishedAt", (gnostic.openapi.v3.property) = {description: "结束时间"}];// 结束时间
+  int64 expiration_minutes = 102 [json_name = "expirationMinutes", (gnostic.openapi.v3.property) = {description: "过期时间"}];// 结束时间
+  int64 billing_duration_sec = 103 [json_name = "billingDurationSec", (gnostic.openapi.v3.property) = {description: "计费时长"}];// 计费时长（秒）
+  optional google.protobuf.Timestamp created_at = 200 [json_name = "createdAt", (gnostic.openapi.v3.property) = {description: "创建时间"}];// 创建时间
+  optional google.protobuf.Timestamp updated_at = 201 [json_name = "updatedAt", (gnostic.openapi.v3.property) = {description: "更新时间"}];// 更新时间
+  optional google.protobuf.Timestamp deleted_at = 202 [json_name = "deletedAt", (gnostic.openapi.v3.property) = {description: "删除时间"}];// 删除时间
+}
+
+
+// 创建沙箱请求
+message CreateSandboxRequest {
+  Sandbox data = 1;
+
+  optional string password = 13 [
+    json_name = "password",
+    (gnostic.openapi.v3.property) = {description: "访问密码（仅输入，不返回）"},
+    (google.api.field_behavior) = INPUT_ONLY
+  ];
+
+  string flavor_name = 100  [ json_name = "flavor_name" , (gnostic.openapi.v3.property) = {description: "指定运行规格"} ];
+}
+
+// 沙箱列表响应
+message ListSandboxResponse {
+  repeated Sandbox items = 1;
+  uint64 total = 2;
+}
+
+// 沙箱详情请求
+message GetSandboxRequest {
+  oneof query_by {
+    uint64 id = 1 [
+      (gnostic.openapi.v3.property) = {description: "沙箱ID", read_only: true},
+      json_name = "id"
+    ]; // 沙箱ID
+    string name = 2 [
+      (gnostic.openapi.v3.property) = {description: "沙箱名称", read_only: true},
+      json_name = "name"
+    ]; // 沙箱名称
+  }
+  
+  optional google.protobuf.FieldMask view_mask = 100 [
+    json_name = "viewMask",
+    (gnostic.openapi.v3.property) = {
+      description: "视图字段过滤器，用于控制返回的字段"
+    }
+  ]; // 视图字段过滤器，用于控制返回的字段
+}
+
+
+
+
+// 更新沙箱请求
+message UpdateSandboxRequest {
+  uint64 id = 1;                                        // 沙箱ID
+  Sandbox data = 2;
+
+  google.protobuf.FieldMask update_mask = 3 [
+    (gnostic.openapi.v3.property) = {
+      description: "要更新的字段列表",
+      example: {yaml : "id,realname,username"}
+    },
+    json_name = "updateMask"
+  ]; // 要更新的字段列表
+
+  optional bool allow_missing = 4 [
+    (gnostic.openapi.v3.property) = {description: "如果设置为true的时候，资源不存在则会新增(插入)，并且在这种情况下`updateMask`字段将会被忽略。"},
+    json_name = "allowMissing"
+  ]; // 如果设置为true的时候，资源不存在则会新增(插入)，并且在这种情况下`updateMask`字段将会被忽略。
+}
+
+// 删除沙箱请求
+message DeleteSandboxRequest {
+
+  uint64 id = 1 [
+    (gnostic.openapi.v3.property) = {description: "沙箱ID", read_only: true},
+    json_name = "id"
+  ]; // 沙箱ID
+  optional bool remove_history = 2 [
+    (gnostic.openapi.v3.property) = {description: "是否删除沙箱历史记录，默认为false，即仅删除沙箱实例，不删除相关历史记录"},
+    json_name = "removeHistory"
+  ];
+}
+
+// 沙箱是否存在 - 请求
+message SandboxExistsRequest {
+  oneof query_by {
+    uint64 id = 1 [
+      (gnostic.openapi.v3.property) = {description: "沙箱ID", read_only: true},
+      json_name = "id"
+    ]; // 沙箱ID
+
+    string name = 2 [
+      (gnostic.openapi.v3.property) = {description: "沙箱名称", read_only: true},
+      json_name = "name"
+    ]; // 沙箱名称
+  }
+}
+
+// 沙箱是否存在 - 答复
+message SandboxExistsResponse {
+  bool exist = 1;
+}
+
+// 沙箱数量响应
+message CountSandboxResponse {
+  uint64 count = 1;  // 沙箱数量
+}
+
+// 重启沙箱请求
+message RestartSandboxRequest {
+  uint64 id = 1;                                        // 沙箱ID
+}
+
+// 重启沙箱响应
+message RestartSandboxResponse {
+  int32 count = 1;
+}
+
+// 启动沙箱请求
+message StartSandboxRequest {
+  uint64 id = 1;                                        // 沙箱ID
+}
+
+// 启动沙箱响应
+message StartSandboxResponse {
+  int32 count = 1;
+}
+
+// 停止沙箱请求
+message StopSandboxRequest {
+  uint64 id = 1;                                        // 沙箱ID
+}
+
+// 停止沙箱响应
+message StopSandboxResponse {
+  int32 count = 1;
+}
+
+// 沙箱详情请求
+message GetSandboxPasswordRequest {
+  uint64 id = 1;
+}
+
+
+// 沙箱详情请求
+message GetSandboxPasswordResponse {
+  string password = 1 [
+    json_name = "password",
+    (gnostic.openapi.v3.property) = {description: "访问密码"}
+  ]; // 访问密码（仅返回，不输入）
+}

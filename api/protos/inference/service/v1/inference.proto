@@ -1,0 +1,259 @@
+syntax = "proto3";
+
+package inference.service.v1;
+
+import "gnostic/openapi/v3/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/field_mask.proto";
+import "google/api/field_behavior.proto";
+import "pagination/v1/pagination.proto";
+import "tenant/service/v1/tenant_resource.proto"; // 引用租户资源定义
+
+// -------------------------- 推理服务接口定义 --------------------------
+service InferenceService {
+  // 推理列表
+  rpc List(pagination.PagingRequest) returns (ListInferenceResponse) {}
+
+  // 统计推理数量
+  rpc Count (pagination.PagingRequest) returns (CountInferenceResponse) {}
+
+  // 推理详情
+  rpc Get(GetInferenceRequest) returns (Inference) {}
+
+  // 创建推理服务 (触发 Workflow)
+  rpc Create(CreateInferenceRequest) returns (google.protobuf.Empty) {}
+
+  // 更新推理配置 (如描述、备注等，不涉及资源变更)
+  rpc Update(UpdateInferenceRequest) returns (google.protobuf.Empty) {}
+
+  // 删除推理服务 (触发 Workflow)
+  rpc Delete(DeleteInferenceRequest) returns (google.protobuf.Empty) {}
+
+  // 启动推理服务 (Stop后再次启动)
+  rpc Start(StartInferenceRequest) returns (google.protobuf.Empty) {}
+
+  // 停止推理服务 (Scale到0，保留数据)
+  rpc Stop(StopInferenceRequest) returns (google.protobuf.Empty) {}
+
+  // 重启推理服务 (Rolling Restart)
+  rpc Restart(RestartInferenceRequest) returns (google.protobuf.Empty) {}
+
+  // 扩缩容推理服务 (支持手动扩缩容或修改HPA配置)
+  rpc Scale(ScaleInferenceRequest) returns (google.protobuf.Empty) {}
+
+  // 推理是否存在
+  rpc Exists (InferenceExistsRequest) returns (InferenceExistsResponse) {}
+
+  // 获取推理服务访问Token (不直接在Get中返回以保证安全)
+  rpc GetToken(GetInferenceTokenRequest) returns (GetInferenceTokenResponse) {}
+}
+
+
+// -------------------------- 消息定义 --------------------------
+
+// 推理状态枚举
+enum InferenceStatus {
+  UNSPECIFIED = 0; // 未指定
+  CREATING = 1;    // 创建中
+  RUNNING = 2;     // 运行中
+  STOPPED = 3;     // 已停止
+  RESTARTING = 4;  // 重启中
+  SCALING = 5;     // 扩缩容中 (新增)
+  ERROR = 6;       // 异常
+  DELETING = 7;    // 删除中
+}
+
+// 推理服务详情信息
+message Inference {
+  optional uint64 id = 1 [
+    json_name = "id",
+    (gnostic.openapi.v3.property) = {description: "推理ID", read_only: true}
+  ];
+
+  string name = 2 [
+    json_name = "name",
+    (google.api.field_behavior) = REQUIRED,
+    (gnostic.openapi.v3.property) = {description: "推理名称", pattern: "^[a-z0-9-]{1,63}$"}
+  ];
+
+  string tenant_name = 3 [
+    json_name = "tenantName",
+    (google.api.field_behavior) = REQUIRED,
+    (gnostic.openapi.v3.property) = {description: "所属租户"}
+  ];
+
+  InferenceStatus status = 4 [
+    json_name = "status",
+    (gnostic.openapi.v3.property) = {description: "状态", read_only: true}
+  ];
+
+  // --- 模型信息 ---
+  uint64 model_id = 5 [
+    json_name = "modelId",
+    (gnostic.openapi.v3.property) = {description: "关联模型ID"}
+  ];
+  string model_name = 6 [
+    json_name = "modelName",
+    (gnostic.openapi.v3.property) = {description: "模型名称快照", read_only: true}
+  ];
+  optional string image = 7 [
+    json_name = "image",
+    (gnostic.openapi.v3.property) = {description: "使用的镜像地址"}
+  ];
+
+  // --- 扩缩容配置 ---
+  int32 replicas = 8 [
+    json_name = "replicas",
+    (gnostic.openapi.v3.property) = {description: "当前副本数", default: {number: 1}}
+  ];
+  optional int32 min_replicas = 9 [
+    json_name = "minReplicas",
+    (gnostic.openapi.v3.property) = {description: "HPA最小副本数(0表示禁用HPA)"}
+  ];
+  optional int32 max_replicas = 10 [
+    json_name = "maxReplicas",
+    (gnostic.openapi.v3.property) = {description: "HPA最大副本数"}
+  ];
+
+  // --- 网络配置 ---
+  int32 port = 11 [
+    json_name = "port",
+    (gnostic.openapi.v3.property) = {description: "服务端口", default: {number: 8000}}
+  ];
+  optional string url = 12 [
+    json_name = "url",
+    (gnostic.openapi.v3.property) = {description: "访问地址", read_only: true}
+  ];
+  string deployment_name = 13 [
+    json_name = "deploymentName",
+    (gnostic.openapi.v3.property) = {description: "K8s Deployment名称", read_only: true}
+  ];
+  string service_name = 14 [
+    json_name = "serviceName",
+    (gnostic.openapi.v3.property) = {description: "K8s Service名称", read_only: true}
+  ];
+
+  // --- 资源配额 (单副本) ---
+  optional tenant.service.v1.Quota quota = 15 [
+    json_name = "quota",
+    (gnostic.openapi.v3.property) = {description: "单副本资源配额"}
+  ];
+
+  // --- 环境与配置 ---
+  repeated string command = 16 [json_name = "command"];
+  repeated string args = 17 [json_name = "args"];
+  map<string, string> env = 18 [json_name = "env"];
+
+  // --- 描述信息 ---
+  optional string description = 19 [json_name = "description"];
+  optional string remark = 20 [json_name = "remark"];
+
+  // --- 计费与时间 ---
+  int64 billing_duration_sec = 21 [
+    json_name = "billingDurationSec",
+    (gnostic.openapi.v3.property) = {description: "累计挂钟运行时长(秒)", read_only: true}
+  ];
+  int64 usage_replica_seconds = 22 [
+    json_name = "usageReplicaSeconds",
+    (gnostic.openapi.v3.property) = {description: "累计副本运行时长(秒)", read_only: true}
+  ];
+  int64 usage_cpu_seconds = 23 [json_name = "usageCpuSeconds", (gnostic.openapi.v3.property) = {read_only: true}];
+  int64 usage_gpu_seconds = 24 [json_name = "usageGpuSeconds", (gnostic.openapi.v3.property) = {read_only: true}];
+
+  int64 expiration_minutes = 25 [
+    json_name = "expirationMinutes",
+    (gnostic.openapi.v3.property) = {description: "自动过期时长(分钟)"}
+  ];
+
+  optional google.protobuf.Timestamp started_at = 100 [json_name = "startedAt"];
+  optional google.protobuf.Timestamp finished_at = 101 [json_name = "finishedAt"];
+  optional google.protobuf.Timestamp last_activity_time = 102 [json_name = "lastActivityTime"];
+
+  optional google.protobuf.Timestamp created_at = 200 [json_name = "createdAt"];
+  optional google.protobuf.Timestamp updated_at = 201 [json_name = "updatedAt"];
+  optional google.protobuf.Timestamp deleted_at = 202 [json_name = "deletedAt"];
+}
+
+// -------------------------- 请求/响应消息 --------------------------
+
+message ListInferenceResponse {
+  repeated Inference items = 1;
+  uint64 total = 2;
+}
+
+message CountInferenceResponse {
+  uint64 count = 1;
+}
+
+message GetInferenceRequest {
+  oneof query_by {
+    uint64 id = 1 [json_name = "id"];
+    string name = 2 [json_name = "name"];
+  }
+  optional google.protobuf.FieldMask view_mask = 100 [json_name = "viewMask"];
+}
+
+message CreateInferenceRequest {
+  Inference data = 1;
+
+  // 可选：直接在创建时传入 Token，否则由系统自动生成
+  optional string auth_token = 2 [
+    json_name = "authToken",
+    (gnostic.openapi.v3.property) = {description: "API访问Token"}
+  ];
+}
+
+message UpdateInferenceRequest {
+  uint64 id = 1;
+  Inference data = 2;
+  google.protobuf.FieldMask update_mask = 3 [json_name = "updateMask"];
+  optional bool allow_missing = 4 [json_name = "allowMissing"];
+}
+
+message DeleteInferenceRequest {
+  uint64 id = 1 [json_name = "id"];
+  optional bool remove_history = 2 [json_name = "removeHistory"]; // 是否物理删除历史记录
+}
+
+message StartInferenceRequest {
+  uint64 id = 1 [json_name = "id"];
+}
+
+message StopInferenceRequest {
+  uint64 id = 1 [json_name = "id"];
+}
+
+message RestartInferenceRequest {
+  uint64 id = 1 [json_name = "id"];
+}
+
+// 扩缩容请求
+message ScaleInferenceRequest {
+  uint64 id = 1 [json_name = "id"];
+
+  int32 replicas = 2 [json_name = "replicas"];
+
+  // HPA 配置 (可选)
+  optional int32 min_replicas = 3 [json_name = "minReplicas"];
+  optional int32 max_replicas = 4 [json_name = "maxReplicas"];
+}
+
+message InferenceExistsRequest {
+  oneof query_by {
+    uint64 id = 1 [json_name = "id"];
+    string name = 2 [json_name = "name"];
+  }
+}
+
+message InferenceExistsResponse {
+  bool exist = 1;
+}
+
+message GetInferenceTokenRequest {
+  uint64 id = 1 [json_name = "id"];
+}
+
+message GetInferenceTokenResponse {
+  string token = 1 [json_name = "token"];
+}

@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package workflow.service.v1;
+
+import "inference/service/v1/inference.proto";
+import "k8s/service/v1/deployment.proto";
+
+option go_package = "go-wind-admin/api/gen/go/workflow/service/v1;workflowV1";
+
+// -------------------------------------------------------------------------
+// Inference Workflow & Activity 交互数据结构定义
+// -------------------------------------------------------------------------
+
+// CheckAndPrepareInferenceRequest 检查配额并准备数据
+message CheckAndPrepareInferenceRequest {
+  inference.service.v1.CreateInferenceRequest db_record = 1 [json_name = "dbRecord"];
+}
+
+// CheckAndPrepareInferenceResponse 准备好的数据
+message CheckAndPrepareInferenceResponse {
+  // 准备好的 K8s 部署请求 (已渲染模板、注入环境变量)
+  k8s.service.v1.CreateDeploymentReq infrastructure = 1 [json_name = "infrastructure"];
+
+  // 回填了信息的 DB 记录 (如 DeploymentName, ServiceName, Image 等)
+  inference.service.v1.CreateInferenceRequest db_record = 2 [json_name = "dbRecord"];
+}
+
+// -------------------------------------------------------------------------
+// 扩缩容相关
+// -------------------------------------------------------------------------
+
+// ScaleInferenceRequest 扩缩容 Activity 请求
+// (实际上可以直接复用 k8s.service.v1.ScaleDeploymentReq，但为了解耦定义一个 Wrapper 也可以)
+// 这里我们为了 Activity 定义的清晰，直接复用 K8s 的或 Inference 的定义即可。
+// 在 Go 代码中：Activity(ctx, *k8sV1.ScaleDeploymentReq) error
+
+// -------------------------------------------------------------------------
+// 状态更新相关 (Activity Input)
+// -------------------------------------------------------------------------
+
+// UpdateInferenceStatusRequest 更新状态请求 (用于 Activity)
+message UpdateInferenceStatusRequest {
+  uint64 id = 1 [json_name = "id"];
+  inference.service.v1.InferenceStatus status = 2 [json_name = "status"];
+
+  // 时间更新类型: "start" (记录started_at), "finish" (记录finished_at), "" (仅状态)
+  string time_update_type = 3 [json_name = "timeUpdateType"];
+
+  string reason = 4 [json_name = "reason"]; // 变更原因/错误信息
+}

@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package server.service.v1;
+
+
+import "gnostic/openapi/v3/annotations.proto";
+
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/field_mask.proto";
+
+
+import "pagination/v1/pagination.proto";
+import "model/service/v1/model.proto"; // 引用通用定义
+import "model/service/v1/model_registry.proto";
+
+// -------------------------- 沙箱服务定义 --------------------------
+service ModelService {
+  // 模型列表
+  rpc List (pagination.PagingRequest) returns (model.service.v1.ListModelResponse){
+    option (google.api.http) = {
+      get: "/server/v1/models"
+    };
+  };
+
+  // 模型详情
+  rpc Get(model.service.v1.GetModelRequest) returns (model.service.v1.Model){
+    option (google.api.http) = {
+      get: "/server/v1/models/{id}"
+    };
+  };
+
+  // 创建模型
+  rpc Create(model.service.v1.CreateModelRequest) returns (model.service.v1.Model) {
+    option (google.api.http) = {
+      post: "/server/v1/models",
+      body: "*"
+    };
+  };
+
+  // 更新模型
+  rpc Update(model.service.v1.UpdateModelRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      put: "/server/v1/models/{id}",
+      body: "*"
+    };
+  };
+
+  // 删除模型
+  rpc Delete(model.service.v1.DeleteModelRequest) returns  (google.protobuf.Empty){
+    option (google.api.http) = {
+      delete: "/server/v1/models/{id}"
+    };
+  };
+
+  // 是否存在
+  rpc Exists (model.service.v1.ModelExistsRequest) returns (model.service.v1.ModelExistsResponse) {
+    option (google.api.http) = {
+      get: "/server/v1/models:exists"
+    };
+  }
+
+  rpc ListTags (model.service.v1.ListTagsRequest) returns (model.service.v1.ListTagsResponse) {
+    option (google.api.http) = {
+      get: "/server/v1/models/{id}/tags"
+    };
+  }
+
+  // 模型对象列表
+  rpc ListObjects(model.service.v1.ListObjectsRequest) returns (model.service.v1.ListObjectsResponse){
+    option (google.api.http) = {
+      get: "/server/v1/models/{id}/repositories/{branch}/objects/ls"
+    };
+  }
+
+}

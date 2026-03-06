@@ -1,0 +1,43 @@
+
+
+###
+### GRPC request to example server
+GRPC {{url}}/model.service.v1.ModelService/List
+
+{
+  "page": 1,
+  "page_size": 10
+}
+
+### 沙箱管理
+#### 沙箱列表
+GET {{url}}/server/v1/sandboxes
+Content-Type: application/json
+
+
+#### 创建沙箱
+POST {{url}}/server/v1/sandboxes
+Content-Type: application/json
+
+{
+  "data": {
+    "name": "test2",
+    "modelId": 36,
+    "tenantName": "tenant-737665dd",
+    "description": "1",
+    "remark": "1",
+    "password": "123456",
+    "quota": {
+      "cpu": "10",
+      "memory": "10Gi",
+      "storage": "10Gi",
+      "gpu": "1"
+    }
+  },
+  "flavor_name": "gpu-h20"
+}
+
+### 删除沙箱
+DELETE {{url}}/server/v1/sandboxes/64
+Content-Type: application/json
+

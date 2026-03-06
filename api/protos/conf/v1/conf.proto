@@ -1,0 +1,50 @@
+syntax = "proto3";
+package conf.v1;
+
+
+message Bootstrap {
+    LakeFS lakefs = 1;
+    optional Kubernetes kubernetes = 2;
+    optional ETCD etcd = 3;
+    ResourceConfig resource = 4; // 新增字段
+    Temporal temporal = 5;
+}
+
+
+message LakeFS {
+  string endpoint = 1;
+  string access_key_id = 2;
+  string secret_access_key = 3;
+
+  string bucket_name = 5;
+  optional string default_branch = 6;
+}
+
+message Kubernetes {
+  KubernetesConfig config = 1;
+}
+
+message Temporal {
+  string address = 1;
+}
+
+message KubernetesConfig {
+  string name= 1;
+  optional bool in_cluster = 2;
+  optional bool in_local = 3;
+  optional string kubeconfig_path = 4;
+  optional double min_cpu = 5;
+  optional double min_mem = 6;
+  optional int32 min_gpu = 7;
+}
+
+message ETCD {
+  repeated string endpoints = 1;
+  string username = 2;
+  string password = 3;
+}
+
+message ResourceConfig {
+  // Key: GPU型号关键字 (如 "A800"), Value: 展示系列名 (如 "NVIDIA A800")
+  map<string, string> gpu_mapping = 1;
+}

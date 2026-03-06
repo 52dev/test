@@ -1,0 +1,84 @@
+syntax = "proto3";
+
+package server.service.v1;
+
+import "gnostic/openapi/v3/annotations.proto";
+
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/field_mask.proto";
+
+
+import "pagination/v1/pagination.proto";
+import "sandbox/service/v1/sandbox.proto"; // 引用通用定义
+
+
+// -------------------------- 沙箱服务定义 --------------------------
+service InferenceService {
+  // 沙箱列表
+  rpc List (pagination.PagingRequest) returns (sandbox.service.v1.ListSandboxResponse){
+    option (google.api.http) = {
+      get: "/server/v1/sandboxes"
+    };
+  };
+
+  // 沙箱详情
+  rpc Get(sandbox.service.v1.GetSandboxRequest) returns (sandbox.service.v1.Sandbox){
+    option (google.api.http) = {
+      get: "/server/v1/sandboxes/{id}"
+    };
+  };
+
+  // 创建沙箱（需先调用资源服务分配GPU）
+  rpc Create(sandbox.service.v1.CreateSandboxRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/server/v1/sandboxes",
+      body: "*"
+    };
+  };
+
+  // 更新沙箱
+  rpc Update(sandbox.service.v1.UpdateSandboxRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      put: "/server/v1/sandboxes/{id}",
+      body: "*"
+    };
+  };
+
+  // 删除沙箱（销毁，需先调用资源服务释放GPU）
+  rpc Delete(sandbox.service.v1.DeleteSandboxRequest) returns  (google.protobuf.Empty){
+    option (google.api.http) = {
+      delete: "/server/v1/sandboxes/{id}"
+    };
+  };
+
+
+  // 重启沙箱
+  rpc Restart (google.protobuf.Empty) returns (sandbox.service.v1.RestartSandboxResponse) {
+    option (google.api.http) = {
+      post: "/server/v1/sandboxes:restart"
+      body: "*"
+    };
+  }
+
+  // 启动沙箱
+  rpc Start (google.protobuf.Empty) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/server/v1/inference:start"
+      body: "*"
+    };
+  }
+
+  // 停止沙箱
+  rpc Stop (google.protobuf.Empty) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/server/v1/sandboxes:stop"
+      body: "*"
+    };
+  }
+
+
+}

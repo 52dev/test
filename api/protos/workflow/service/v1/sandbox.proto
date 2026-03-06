@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package workflow.service.v1;
+
+import "gnostic/openapi/v3/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/struct.proto";
+import "pagination/v1/pagination.proto";
+import "tenant/service/v1/tenant_resource.proto";
+import "sandbox/service/v1/sandbox.proto";
+import "k8s/service/v1/deployment.proto";
+
+message CheckAndPrepareRequest {
+  sandbox.service.v1.CreateSandboxRequest db_record = 1;
+}
+
+
+message CheckAndPrepareResponse {
+
+  k8s.service.v1.CreateDeploymentReq infrastructure = 1;
+
+  sandbox.service.v1.CreateSandboxRequest db_record = 2;
+}

@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package k8s.service.v1;
+
+import "gnostic/openapi/v3/annotations.proto";
+import "google/protobuf/empty.proto";
+import "tenant/service/v1/tenant_resource.proto";
+
+service DeploymentService {
+  rpc Create(CreateDeploymentReq) returns (google.protobuf.Empty) {}
+  // ... 其他现有 RPC ...
+}
+
+// S3 挂载描述
+message S3Mount {
+  string mount_path = 1; // 容器内挂载路径 (如 /models/llama2)
+  string s3_path = 2;    // S3 路径 (如 models/llama2-7b)
+  bool read_only = 3;    // 是否只读 (模型通常只读)
+}
+
+// 创建Deployment
+message CreateDeploymentReq  {
+  string tenant_name = 1;
+  //   资源需求
+  tenant.service.v1.Quota quota = 2;
+
+  string name = 3;
+  string image = 4;
+  map<string, string> node_selector= 5;
+  repeated string command_args = 6;
+  repeated int32 ports = 7;
+  bool jupyter = 8;
+  repeated string writable_paths = 9;
+  map<string,string> env = 10;
+
+  // --- 新增：HPA & 多副本支持 ---
+  int32 replicas = 11;      // 初始副本数
+  int32 min_replicas = 12;  // HPA 最小副本数 (0表示不启用HPA)
+  int32 max_replicas = 13;  // HPA 最大副本数
+
+  // --- 新增：S3 挂载支持 ---
+  repeated S3Mount s3_mounts = 14;
+}
+
+// 创建Deployment返回
+message CreateDeploymentResp  {
+
+}
+
+// 删除Deployment
+message DeleteDeploymentReq  {
+  string tenant_name = 1;
+  string name = 3;
+}
+
+// Rollout Deployment
+message RolloutDeploymentReq  {
+  string tenant_name = 1;
+  string name = 3;
+}
+
+// Start Deployment
+message StartDeploymentReq  {
+  string tenant_name = 1;
+  string name = 2;
+  optional int32 replicas =3;
+}
+
+// Stop Deployment
+message StopDeploymentReq  {
+  string tenant_name = 1;
+  string name = 3;
+}
+
+// --- 新增：Scale & HPA 相关 ---
+
+// 扩缩容请求
+message ScaleDeploymentReq {
+  string tenant_name = 1;
+  string name = 2;
+
+  int32 replicas = 3;      // 期望副本数 (如果启用了HPA，这个值可能会被HPA覆盖或作为基准)
+
+  // 更新 HPA 配置 (可选)
+  optional int32 min_replicas = 4;
+  optional int32 max_replicas = 5;
+}
