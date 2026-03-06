@@ -51,14 +51,14 @@ func (s *InferenceService) Create(ctx context.Context, req *inferenceV1.CreateIn
 		return nil, serverV1.ErrorBadRequest("invalid request")
 	}
 
-	workflowID := fmt.Sprintf("inference-create-%s-%s", req.Data.TenantName, req.Data.Name)
+	workflowID := fmt.Sprintf("inference-%d", req.Data.GetId())
 
 	workflowOptions := client.StartWorkflowOptions{
 		ID:        workflowID,
 		TaskQueue: "inference-task-queue",
 	}
 
-	_, err := s.temporalClient.ExecuteWorkflow(ctx, workflowOptions, workflowDef.CreateInferenceWorkflow, req)
+	_, err := s.temporalClient.ExecuteWorkflow(ctx, workflowOptions, workflowDef.InferenceLifecycleWorkflow, req)
 	if err != nil {
 		s.log.Errorf("failed to trigger workflow: %v", err)
 		return nil, serverV1.ErrorInternalServerError("failed to submit request")
@@ -81,7 +81,7 @@ func (s *InferenceService) Update(ctx context.Context, req *inferenceV1.UpdateIn
 }
 
 func (s *InferenceService) Delete(ctx context.Context, req *inferenceV1.DeleteInferenceRequest) (*emptypb.Empty, error) {
-	workflowID := fmt.Sprintf("inference-create-%d", req.GetId()) // 同上
+	workflowID := fmt.Sprintf("inference-%d", req.GetId()) // 同上
 	err := s.temporalClient.SignalWorkflow(ctx, workflowID, "", "SIGNAL_DELETE", nil)
 	if err != nil {
 		// 如果 Workflow 已经不存在（比如已经结束了），可能需要直接调 Repo 删 DB 兜底
@@ -103,7 +103,7 @@ func (s *InferenceService) Start(ctx context.Context, req *inferenceV1.StartInfe
 }
 
 func (s *InferenceService) Stop(ctx context.Context, req *inferenceV1.StopInferenceRequest) (*emptypb.Empty, error) {
-	workflowID := fmt.Sprintf("inference-create-%d", req.GetId()) // 注意：ID 必须和 Create 时的一致
+	workflowID := fmt.Sprintf("inference-%d", req.GetId()) // 注意：ID 必须和 Create 时的一致
 	// 如果你之前 Create 用的是 "inference-create-{tenant}-{name}"，这里必须拼出一样的 ID
 	// 建议 ID 统一使用 "inference-lifecycle-{db_id}" 格式，方便查找
 
@@ -116,7 +116,7 @@ func (s *InferenceService) Stop(ctx context.Context, req *inferenceV1.StopInfere
 }
 
 func (s *InferenceService) Restart(ctx context.Context, req *inferenceV1.RestartInferenceRequest) (*emptypb.Empty, error) {
-	workflowID := fmt.Sprintf("inference-create-%d", req.GetId()) // 同上，需保证 ID 一致
+	workflowID := fmt.Sprintf("inference-%d", req.GetId()) // 同上，需保证 ID 一致
 	err := s.temporalClient.SignalWorkflow(ctx, workflowID, "", "SIGNAL_START", nil)
 	if err != nil {
 		return nil, err
@@ -125,7 +125,7 @@ func (s *InferenceService) Restart(ctx context.Context, req *inferenceV1.Restart
 }
 
 func (s *InferenceService) Scale(ctx context.Context, req *inferenceV1.ScaleInferenceRequest) (*emptypb.Empty, error) {
-	workflowID := fmt.Sprintf("inference-create-%d", req.GetId())
+	workflowID := fmt.Sprintf("inference-%d", req.GetId())
 
 	err := s.temporalClient.SignalWorkflow(ctx, workflowID, "", "SIGNAL_SCALE", req)
 	return &emptypb.Empty{}, err

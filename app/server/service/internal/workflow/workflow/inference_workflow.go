@@ -14,9 +14,8 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
-// InferenceLifecycleWorkflow [修复 1]:
-// 取代原有的 CreateWorkflow。这是一个长运行 Workflow (Entity Pattern)。
-// 它负责：创建 -> 运行(监控计费) -> 响应信号(停/启/删) -> 退出。
+// InferenceLifecycleWorkflow 是一个长运行的守护进程 Workflow
+// 负责管理推理服务的全生命周期：创建 -> 运行(监控) -> 停止/重启/扩容 -> 删除
 func InferenceLifecycleWorkflow(ctx workflow.Context, req *inferenceV1.CreateInferenceRequest) error {
 	logger := workflow.GetLogger(ctx)
 	ao := workflow.ActivityOptions{
@@ -27,6 +26,7 @@ func InferenceLifecycleWorkflow(ctx workflow.Context, req *inferenceV1.CreateInf
 	var a *activity.InferenceActivities
 
 	// ------------------- 阶段 1: 资源初始化 -------------------
+
 	// 1. Check & Prepare
 	prepareOutput := &workflowV1.CheckAndPrepareInferenceResponse{}
 	if err := workflow.ExecuteActivity(ctx, a.CheckAndPrepareInference, &workflowV1.CheckAndPrepareInferenceRequest{DbRecord: req}).Get(ctx, prepareOutput); err != nil {
@@ -53,24 +53,46 @@ func InferenceLifecycleWorkflow(ctx workflow.Context, req *inferenceV1.CreateInf
 	_ = workflow.ExecuteActivity(ctx, a.UpdateInferenceURL, resourceID, domainUrl).Get(ctx, nil)
 	_ = workflow.ExecuteActivity(ctx, a.UpdateInferenceStatus, activity.UpdateInferenceStatusInput{Id: resourceID, Status: inferenceV1.InferenceStatus_RUNNING, TimeUpdateType: "start"}).Get(ctx, nil)
 
-	// ------------------- 阶段 2: 启动计费监控 -------------------
-	// 使用 Child Workflow 启动监控，父流程不退出，保持对子流程的控制
-	monitorCtx, monitorCancel := workflow.WithCancel(ctx) // 用于手动停止监控
-	monitorID := fmt.Sprintf("monitor-inference-%d", resourceID)
-	childOpts := workflow.ChildWorkflowOptions{
-		WorkflowID:        monitorID,
-		ParentClosePolicy: enums.PARENT_CLOSE_POLICY_TERMINATE, // 父流程结束(如Delete)时，监控必须结束
-		TaskQueue:         "inference-task-queue",
+	// ------------------- 阶段 2: 启动计费监控 (Daemon) -------------------
+
+	// 定义监控相关的变量，以便在重启时复用逻辑
+	var monitorCtx workflow.Context
+	var monitorCancel workflow.CancelFunc
+	var monitorFuture workflow.ChildWorkflowFuture
+
+	// 辅助函数：启动监控
+	startMonitor := func() {
+		monitorCtx, monitorCancel = workflow.WithCancel(ctx)
+		monitorID := fmt.Sprintf("monitor-inference-%d", resourceID)
+		childOpts := workflow.ChildWorkflowOptions{
+			WorkflowID:        monitorID,
+			ParentClosePolicy: enums.PARENT_CLOSE_POLICY_TERMINATE, // 父流程结束时，监控必须结束
+			TaskQueue:         "inference-task-queue",
+		}
+		monitorCtx = workflow.WithChildOptions(monitorCtx, childOpts)
+		monitorFuture = workflow.ExecuteChildWorkflow(monitorCtx, InferenceBillingMonitorWorkflow, resourceID, record.TenantName, record.DeploymentName)
+		logger.Info("Billing monitor started", "WorkflowID", monitorID)
 	}
-	monitorCtx = workflow.WithChildOptions(monitorCtx, childOpts)
 
-	// 异步启动监控
-	workflow.ExecuteChildWorkflow(monitorCtx, InferenceBillingMonitorWorkflow, resourceID, record.TenantName, record.DeploymentName)
+	// 辅助函数：停止监控 (Graceful Shutdown)
+	stopMonitor := func() {
+		if monitorCancel != nil {
+			monitorCancel() // 发送取消信号
+			// 等待子流程处理完最后一次计费并退出
+			if monitorFuture != nil {
+				_ = monitorFuture.Get(ctx, nil)
+			}
+			logger.Info("Billing monitor stopped")
+		}
+	}
 
-	// ------------------- 阶段 3: 信号监听循环 (Daemon) -------------------
+	// 首次启动监控
+	startMonitor()
+
+	// ------------------- 阶段 3: 信号监听循环 -------------------
+
 	selector := workflow.NewSelector(ctx)
 
-	// 信号通道定义
 	sigStop := workflow.GetSignalChannel(ctx, "SIGNAL_STOP")
 	sigStart := workflow.GetSignalChannel(ctx, "SIGNAL_START")
 	sigDelete := workflow.GetSignalChannel(ctx, "SIGNAL_DELETE")
@@ -78,55 +100,81 @@ func InferenceLifecycleWorkflow(ctx workflow.Context, req *inferenceV1.CreateInf
 
 	for {
 		var exitLoop bool
+
+		// 处理 STOP 信号
 		selector.AddReceive(sigStop, func(c workflow.ReceiveChannel, _ bool) {
 			c.Receive(ctx, nil)
 			logger.Info("Received STOP signal")
-			// 1. 停止监控
-			monitorCancel()
-			// 2. K8s Scale to 0
+
+			// 1. 优雅停止监控 (确保计费数据不丢失)
+			stopMonitor()
+
+			// 2. K8s Scale to 0 (也会清理 HPA)
 			_ = workflow.ExecuteActivity(ctx, a.StopInferenceInfra, &k8sV1.StopDeploymentReq{TenantName: record.TenantName, Name: record.DeploymentName}).Get(ctx, nil)
-			// 3. Update Status
+
+			// 3. Update Status & Finalize Billing
 			_ = workflow.ExecuteActivity(ctx, a.UpdateInferenceStatus, activity.UpdateInferenceStatusInput{Id: resourceID, Status: inferenceV1.InferenceStatus_STOPPED, TimeUpdateType: "finish"}).Get(ctx, nil)
 			_ = workflow.ExecuteActivity(ctx, a.FinalizeBilling, resourceID).Get(ctx, nil)
 		})
 
+		// 处理 START 信号
 		selector.AddReceive(sigStart, func(c workflow.ReceiveChannel, _ bool) {
 			c.Receive(ctx, nil)
 			logger.Info("Received START signal")
-			// 1. K8s Start (恢复副本数)
-			// 需先获取当前配置中的 replicas，这里简化为 1 或从 DB 查
+
+			// 1. K8s Start
 			startReq := &k8sV1.StartDeploymentReq{TenantName: record.TenantName, Name: record.DeploymentName}
+			// 这里 Activity 内部应该去查 DB 或 K8s 之前的 Replicas 配置，或者默认 1
 			_ = workflow.ExecuteActivity(ctx, a.StartInferenceInfra, startReq).Get(ctx, nil)
+
 			// 2. Update Status
 			_ = workflow.ExecuteActivity(ctx, a.UpdateInferenceStatus, activity.UpdateInferenceStatusInput{Id: resourceID, Status: inferenceV1.InferenceStatus_RUNNING, TimeUpdateType: "start"}).Get(ctx, nil)
 
-			// 3. 重启监控 (重建 Context)
-			monitorCtx, monitorCancel = workflow.WithCancel(ctx)
-			monitorCtx = workflow.WithChildOptions(monitorCtx, childOpts)
-			workflow.ExecuteChildWorkflow(monitorCtx, InferenceBillingMonitorWorkflow, resourceID, record.TenantName, record.DeploymentName)
+			// 3. 重新启动监控
+			stopMonitor() // 防御性编程：先停再启，防止重复
+			startMonitor()
 		})
 
+		// 处理 SCALE 信号
 		selector.AddReceive(sigScale, func(c workflow.ReceiveChannel, _ bool) {
 			var scaleReq k8sV1.ScaleDeploymentReq
 			c.Receive(ctx, &scaleReq)
-			// 执行扩缩容逻辑
+
+			// 补充必要的参数 (如果 Signal 传参不全)
+			scaleReq.TenantName = record.TenantName
+			scaleReq.Name = record.DeploymentName
+
+			// 1. Update Status -> SCALING
 			_ = workflow.ExecuteActivity(ctx, a.UpdateInferenceStatus, activity.UpdateInferenceStatusInput{Id: resourceID, Status: inferenceV1.InferenceStatus_SCALING}).Get(ctx, nil)
-			_ = workflow.ExecuteActivity(ctx, a.ScaleInferenceInfra, &scaleReq).Get(ctx, nil)
-			_ = workflow.ExecuteActivity(ctx, a.UpdateInferenceStatus, activity.UpdateInferenceStatusInput{Id: resourceID, Status: inferenceV1.InferenceStatus_RUNNING}).Get(ctx, nil)
+
+			// 2. Execute Scale
+			err := workflow.ExecuteActivity(ctx, a.ScaleInferenceInfra, &scaleReq).Get(ctx, nil)
+
+			// 3. Update Status -> RUNNING or ERROR
+			status := inferenceV1.InferenceStatus_RUNNING
+			if err != nil {
+				// Scale 失败通常不影响服务运行，但状态需要回滚
+				logger.Error("Scale failed", "error", err)
+			}
+			_ = workflow.ExecuteActivity(ctx, a.UpdateInferenceStatus, activity.UpdateInferenceStatusInput{Id: resourceID, Status: status}).Get(ctx, nil)
 		})
 
+		// 处理 DELETE 信号 (退出点)
 		selector.AddReceive(sigDelete, func(c workflow.ReceiveChannel, _ bool) {
 			c.Receive(ctx, nil)
 			logger.Info("Received DELETE signal")
+
 			// 1. 停止监控
-			monitorCancel()
-			// 2. 清理 K8s
+			stopMonitor()
+
+			// 2. 清理 K8s 资源 (Deployment, Service, Ingress, HPA)
 			_ = workflow.ExecuteActivity(ctx, a.CleanupInferenceInfra, record.TenantName, record.DeploymentName).Get(ctx, nil)
-			// 3. 结算 & 删 DB
+
+			// 3. 最终结算 & 物理删除 DB
 			_ = workflow.ExecuteActivity(ctx, a.FinalizeBilling, resourceID).Get(ctx, nil)
 			_ = workflow.ExecuteActivity(ctx, a.HardDeleteInferenceDBRecord, &inferenceV1.DeleteInferenceRequest{Id: resourceID}).Get(ctx, nil)
 
-			exitLoop = true // 退出循环，结束 Workflow
+			exitLoop = true
 		})
 
 		selector.Select(ctx)

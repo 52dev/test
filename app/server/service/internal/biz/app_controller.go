@@ -529,27 +529,42 @@ func (c *AppController) Delete(ctx context.Context, req *pb.DeleteDeploymentReq)
 	err := c.k8sClient.AutoscalingV2().HorizontalPodAutoscalers(req.TenantName).Delete(ctx, req.Name, metav1.DeleteOptions{
 		PropagationPolicy: &deletePolicy,
 	})
-	// 忽略 NotFound 错误，但如果其他错误则报错
+
+	// 2. 【关键】等待 HPA 真正删除 (简单的轮询检查)
+	// 最多等待 3 秒，防止 HPA Controller 还没反应过来我们就要 Scale 0
+	if err == nil {
+		ticker := time.NewTicker(500 * time.Millisecond)
+		defer ticker.Stop()
+		timeout := time.After(3 * time.Second)
+
+	Loop:
+		for {
+			select {
+			case <-timeout:
+				c.log.Warnf("Timeout waiting for HPA deletion: %s/%s", req.TenantName, req.Name)
+				break Loop
+			case <-ticker.C:
+				_, checkErr := c.k8sClient.AutoscalingV2().HorizontalPodAutoscalers(req.TenantName).Get(ctx, req.Name, metav1.GetOptions{})
+				if errors.IsNotFound(checkErr) {
+					// 确认已删除
+					break Loop
+				}
+			}
+		}
+	} else if !errors.IsNotFound(err) {
+		// 如果是其他错误，记录日志但不阻断流程，尝试强制清理后续资源
+		c.log.Errorf("Failed to delete HPA: %v", err)
+	}
+
+	// 3. 显式将 Deployment 缩容为 0 (Graceful Shutdown)
+	// 此时 HPA 已不存在，Scale 0 操作是安全的
+	patchData := []byte(`{"spec":{"replicas":0}}`)
+	_, err = c.k8sClient.AppsV1().Deployments(req.TenantName).Patch(
+		ctx, req.Name, types.MergePatchType, patchData, metav1.PatchOptions{})
 	if err != nil && !errors.IsNotFound(err) {
-		return fmt.Errorf("failed to delete HPA: %w", err)
+		c.log.Warnf("Failed to scale deployment to 0: %v", err)
 	}
 
-	// 关键步骤 2: 等待 HPA 真正消失 (可选，推荐)
-	// 或者简单的 Sleep 一下让 Controller 反应过来
-	time.Sleep(time.Second * 2)
-
-	// 关键步骤 3: 将 Deployment Replicas 缩容为 0 (优雅停止)
-	// 这比直接 Delete Deployment 更安全，能让 PreStop Hook 执行
-	scaleReq := &pb.ScaleDeploymentReq{
-		TenantName: req.TenantName,
-		Name:       req.Name,
-		Replicas:   0,
-	}
-	err = c.Scale(ctx, scaleReq)
-	if err != nil {
-		c.log.Errorf("failed to scale down deployment before deletion: %v", err)
-		// 不返回错误，继续删除资源，避免卡死
-	}
 	// 1. Delete Deployment
 	err = c.k8sClient.AppsV1().Deployments(req.TenantName).Delete(ctx, req.GetName(), metav1.DeleteOptions{})
 	if err != nil && !errors.IsNotFound(err) {
@@ -662,9 +677,6 @@ func (c *AppController) Scale(ctx context.Context, req *pb.ScaleDeploymentReq) e
 	return nil
 }
 
-// Start, Stop, Rollout 保持不变，可以复用
-// ... (与你之前的代码一致，不再重复) ...
-
 func (c *AppController) Rollout(ctx context.Context, req *pb.RolloutDeploymentReq) error {
 	restartTime := time.Now().Format(time.RFC3339)
 	patchData := []byte(fmt.Sprintf(`{"spec":{"template":{"metadata":{"annotations":{"kubectl.kubernetes.io/restartedAt":"%s"}}}}}`, restartTime))
@@ -674,15 +686,25 @@ func (c *AppController) Rollout(ctx context.Context, req *pb.RolloutDeploymentRe
 }
 
 func (c *AppController) Stop(ctx context.Context, req *pb.StopDeploymentReq) error {
-	// Stop 意味着 Scale to 0
-	// 同时需要禁用 HPA (否则 HPA 会把副本数拉起来)
-	// 1. Delete HPA
-	_ = c.k8sClient.AutoscalingV2().HorizontalPodAutoscalers(req.TenantName).Delete(ctx, req.Name, metav1.DeleteOptions{})
+	// 1. 删除 HPA
+	err := c.k8sClient.AutoscalingV2().HorizontalPodAutoscalers(req.TenantName).Delete(ctx, req.Name, metav1.DeleteOptions{})
 
-	// 2. Scale Deployment to 0
+	// 2. 等待 HPA 删除 (逻辑同 Delete)
+	if err == nil {
+		for i := 0; i < 6; i++ {
+			_, checkErr := c.k8sClient.AutoscalingV2().HorizontalPodAutoscalers(req.TenantName).Get(ctx, req.Name, metav1.GetOptions{})
+			if errors.IsNotFound(checkErr) {
+				break
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+
+	// 3. Scale Deployment to 0
 	patchData := []byte(`{"spec":{"replicas":0}}`)
-	_, err := c.k8sClient.AppsV1().Deployments(req.TenantName).Patch(
+	_, err = c.k8sClient.AppsV1().Deployments(req.TenantName).Patch(
 		ctx, req.Name, types.MergePatchType, patchData, metav1.PatchOptions{})
+
 	return err
 }
 
