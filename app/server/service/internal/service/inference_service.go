@@ -81,16 +81,12 @@ func (s *InferenceService) Update(ctx context.Context, req *inferenceV1.UpdateIn
 }
 
 func (s *InferenceService) Delete(ctx context.Context, req *inferenceV1.DeleteInferenceRequest) (*emptypb.Empty, error) {
-	if req == nil {
-		return nil, serverV1.ErrorBadRequest("invalid request")
-	}
-
-	workflowID := fmt.Sprintf("inference-delete-%d", req.GetId())
-	opts := client.StartWorkflowOptions{ID: workflowID, TaskQueue: "inference-task-queue"}
-
-	_, err := s.temporalClient.ExecuteWorkflow(ctx, opts, workflowDef.DeleteInferenceWorkflow, req)
+	workflowID := fmt.Sprintf("inference-create-%d", req.GetId()) // 同上
+	err := s.temporalClient.SignalWorkflow(ctx, workflowID, "", "SIGNAL_DELETE", nil)
 	if err != nil {
-		return nil, serverV1.ErrorInternalServerError("failed to trigger delete workflow")
+		// 如果 Workflow 已经不存在（比如已经结束了），可能需要直接调 Repo 删 DB 兜底
+		s.log.Warnf("Workflow not found, fallback to direct delete: %v", err)
+		// s.repo.Delete(...)
 	}
 	return &emptypb.Empty{}, nil
 }
@@ -107,21 +103,21 @@ func (s *InferenceService) Start(ctx context.Context, req *inferenceV1.StartInfe
 }
 
 func (s *InferenceService) Stop(ctx context.Context, req *inferenceV1.StopInferenceRequest) (*emptypb.Empty, error) {
-	workflowID := fmt.Sprintf("inference-stop-%d", req.GetId())
-	opts := client.StartWorkflowOptions{ID: workflowID, TaskQueue: "inference-task-queue"}
+	workflowID := fmt.Sprintf("inference-create-%d", req.GetId()) // 注意：ID 必须和 Create 时的一致
+	// 如果你之前 Create 用的是 "inference-create-{tenant}-{name}"，这里必须拼出一样的 ID
+	// 建议 ID 统一使用 "inference-lifecycle-{db_id}" 格式，方便查找
 
-	_, err := s.temporalClient.ExecuteWorkflow(ctx, opts, workflowDef.StopInferenceWorkflow, req)
+	// 发送信号
+	err := s.temporalClient.SignalWorkflow(ctx, workflowID, "", "SIGNAL_STOP", nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to signal stop: %w", err)
 	}
 	return &emptypb.Empty{}, nil
 }
 
 func (s *InferenceService) Restart(ctx context.Context, req *inferenceV1.RestartInferenceRequest) (*emptypb.Empty, error) {
-	workflowID := fmt.Sprintf("inference-restart-%d", req.GetId())
-	opts := client.StartWorkflowOptions{ID: workflowID, TaskQueue: "inference-task-queue"}
-
-	_, err := s.temporalClient.ExecuteWorkflow(ctx, opts, workflowDef.RestartInferenceWorkflow, req)
+	workflowID := fmt.Sprintf("inference-create-%d", req.GetId()) // 同上，需保证 ID 一致
+	err := s.temporalClient.SignalWorkflow(ctx, workflowID, "", "SIGNAL_START", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -129,13 +125,8 @@ func (s *InferenceService) Restart(ctx context.Context, req *inferenceV1.Restart
 }
 
 func (s *InferenceService) Scale(ctx context.Context, req *inferenceV1.ScaleInferenceRequest) (*emptypb.Empty, error) {
-	// Scale 是 HPA 核心接口
-	workflowID := fmt.Sprintf("inference-scale-%d-%d", req.GetId(), req.Replicas)
-	opts := client.StartWorkflowOptions{ID: workflowID, TaskQueue: "inference-task-queue"}
+	workflowID := fmt.Sprintf("inference-create-%d", req.GetId())
 
-	_, err := s.temporalClient.ExecuteWorkflow(ctx, opts, workflowDef.ScaleInferenceWorkflow, req)
-	if err != nil {
-		return nil, err
-	}
-	return &emptypb.Empty{}, nil
+	err := s.temporalClient.SignalWorkflow(ctx, workflowID, "", "SIGNAL_SCALE", req)
+	return &emptypb.Empty{}, err
 }

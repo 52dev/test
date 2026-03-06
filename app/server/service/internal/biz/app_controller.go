@@ -523,8 +523,35 @@ func (c *AppController) CreateRoute(ctx context.Context, deploy *appsv1.Deployme
 
 // Delete 删除 App (Deployment, Service, HPA, Ingress)
 func (c *AppController) Delete(ctx context.Context, req *pb.DeleteDeploymentReq) error {
+	// 关键步骤 1: 先删除 HPA (切断自动伸缩的源头)
+	// 必须确保 HPA 被删除了，K8s 才会停止自动调整 Replicas
+	deletePolicy := metav1.DeletePropagationForeground // 级联删除策略
+	err := c.k8sClient.AutoscalingV2().HorizontalPodAutoscalers(req.TenantName).Delete(ctx, req.Name, metav1.DeleteOptions{
+		PropagationPolicy: &deletePolicy,
+	})
+	// 忽略 NotFound 错误，但如果其他错误则报错
+	if err != nil && !errors.IsNotFound(err) {
+		return fmt.Errorf("failed to delete HPA: %w", err)
+	}
+
+	// 关键步骤 2: 等待 HPA 真正消失 (可选，推荐)
+	// 或者简单的 Sleep 一下让 Controller 反应过来
+	time.Sleep(time.Second * 2)
+
+	// 关键步骤 3: 将 Deployment Replicas 缩容为 0 (优雅停止)
+	// 这比直接 Delete Deployment 更安全，能让 PreStop Hook 执行
+	scaleReq := &pb.ScaleDeploymentReq{
+		TenantName: req.TenantName,
+		Name:       req.Name,
+		Replicas:   0,
+	}
+	err = c.Scale(ctx, scaleReq)
+	if err != nil {
+		c.log.Errorf("failed to scale down deployment before deletion: %v", err)
+		// 不返回错误，继续删除资源，避免卡死
+	}
 	// 1. Delete Deployment
-	err := c.k8sClient.AppsV1().Deployments(req.TenantName).Delete(ctx, req.GetName(), metav1.DeleteOptions{})
+	err = c.k8sClient.AppsV1().Deployments(req.TenantName).Delete(ctx, req.GetName(), metav1.DeleteOptions{})
 	if err != nil && !errors.IsNotFound(err) {
 		return fmt.Errorf("failed to delete sandbox deployment: %w", err)
 	}
@@ -576,7 +603,7 @@ func (c *AppController) Delete(ctx context.Context, req *pb.DeleteDeploymentReq)
 			_ = c.k8sClient.CoreV1().PersistentVolumes().Delete(ctx, pv.Name, metav1.DeleteOptions{})
 		}
 	}
-	
+
 	return nil
 }
 
